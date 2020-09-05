@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly>
+	<id>bin</id>
+	<formats>
+		<format>tar.gz</format>
+	</formats>
+
+	<!-- copy src/release directory -->
+	<fileSets>
+		<fileSet>
+			<directory>target</directory>
+
+			<includes>
+				<include>cms_adapter_*.jar</include>
+				<include>cms_adapterd</include>
+				<include>install.sh</include>
+				<include>log4j.properties</include>
+				<include>mangguotv.properties</include>
+			</includes>
+			<outputDirectory>/</outputDirectory>
+			<fileMode>0755</fileMode>
+		</fileSet>
+	</fileSets>
+
+</assembly>
