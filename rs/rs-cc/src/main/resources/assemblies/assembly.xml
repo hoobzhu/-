@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly>
+	<id>bin</id>
+	<formats>
+		<format>tar.gz</format>
+	</formats>
+	<dependencySets>
+		<dependencySet>
+			<useProjectArtifact>true</useProjectArtifact>
+			<includes>
+				<include>${project.groupId}:${project.artifactId}</include>
+			</includes>
+			<outputDirectory>/</outputDirectory>
+		</dependencySet>
+	</dependencySets>
+	<fileSets>
+		<!-- 把项目自己编译出来的jar文件，打包进zip文件的根目录 -->
+		<fileSet>
+			<directory>${project.build.directory}</directory>
+			<outputDirectory>./</outputDirectory>
+			<includes>
+				<include>rs.jar</include>
+			</includes>
+		</fileSet>
+		<fileSet>
+			<directory>src/main/resources/lib</directory>
+			<outputDirectory>./</outputDirectory>
+			<includes>
+				<include>mysql-connector-java-8.0.17.jar</include>
+			</includes>
+		</fileSet>
+		<fileSet>
+			<directory>src/main/resources</directory>
+			<outputDirectory>./etc</outputDirectory>
+			<includes>
+				<include>config.properties</include>
+				<include>log4j2.xml</include>
+			</includes>
+		</fileSet>
+		<fileSet>
+			<directory>src/main/resources/bin</directory>
+			<outputDirectory>./bin</outputDirectory>
+			<includes>
+				<include>*.sh</include>
+			</includes>
+		</fileSet>
+		<fileSet>
+			<directory>src/main/resources/install</directory>
+			<outputDirectory>./install</outputDirectory>
+			<includes>
+				<include>*.sh</include>
+			</includes>
+		</fileSet>
+	</fileSets>
+</assembly>
