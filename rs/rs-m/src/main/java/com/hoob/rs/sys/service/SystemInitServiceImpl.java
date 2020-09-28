@@ -44,8 +44,7 @@ public class SystemInitServiceImpl implements SystemInitService {
 	@Resource(name="dsTransactionManager")
 	DataSourceTransactionManager dsTransactionManager;
 	
-	@Resource
-	SchedulerJobService schedulerJobService;
+
 	
 	/**
 	 * 加载cms-config.properties
@@ -202,7 +201,7 @@ public class SystemInitServiceImpl implements SystemInitService {
 	 * ******/
 	@Override
 	public void initTimer() {
-		schedulerJobService.initScheduleJob();
+	//	schedulerJobService.initScheduleJob();
 	}
 	
 	/**

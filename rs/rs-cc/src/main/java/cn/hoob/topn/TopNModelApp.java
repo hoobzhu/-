@@ -2,6 +2,8 @@ package cn.hoob.topn;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.api.java.function.FilterFunction;
+import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
 import org.apache.spark.sql.Encoders;
@@ -43,7 +45,7 @@ public class TopNModelApp {
 				
 		Encoder<SeriesModel> seriesModelEncoder = Encoders.bean(SeriesModel.class);
 		//合集过滤不满足条件的，转换成简易模型数据
-		Dataset<SeriesModel> seriesModelDataset = seriesRowDataset.map(row-> 
+		Dataset<SeriesModel> seriesModelDataset = seriesRowDataset.map((MapFunction<Row, SeriesModel>) row->
 		SeriesModel.getSeriesModelWithProgramType(row),seriesModelEncoder);
 
 		//注册视图
@@ -53,7 +55,8 @@ public class TopNModelApp {
 		//初始化日志数据
 		Encoder<TopNContent> topNContentEncoder = Encoders.bean(TopNContent.class);
 		Dataset<TopNContent>topNContentDataset=logDataset.
-				map(row->TopNContent.parseModel(row), topNContentEncoder).filter(row -> row != null);
+				map((MapFunction<String, TopNContent>) row->TopNContent.parseModel(row), topNContentEncoder).
+				filter((FilterFunction<TopNContent>) row -> row != null);
 		topNContentDataset.createOrReplaceTempView("topncontent");
 		Integer limitNum=SysUtils.getSysparamInteger("topNLimitNum","20");
 		Dataset<Row> result=sparkSession.sql(""
@@ -63,7 +66,7 @@ public class TopNModelApp {
 				+ " where rn<="+limitNum)
 				//.distinct();
 				.dropDuplicates("contentId");
-		//MySQLUtlis.excuteBatchReTopN(result);
+		MySQLUtlis.excuteBatchReTopN(result);
 		MySQLUtlis.executeSQL("TRUNCATE topn_recommendation",new String[]{});
 		result.write().format("jdbc")
 		.mode(SaveMode.Append)

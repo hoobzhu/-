@@ -15,7 +15,7 @@
 		">
 	<mvc:annotation-driven conversion-service="conversionService"/>
 
-	<context:component-scan base-package="com.fonsview.rs" use-default-filters="false">
+	<context:component-scan base-package="com.hoob.rs" use-default-filters="false">
 		<context:include-filter type="annotation" expression="org.springframework.web.bind.annotation.RestController" />
 	</context:component-scan>
 

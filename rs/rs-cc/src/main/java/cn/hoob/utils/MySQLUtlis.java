@@ -1,7 +1,6 @@
 package cn.hoob.utils;
 
 import com.mchange.v2.c3p0.ComboPooledDataSource;
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -154,8 +153,8 @@ public class MySQLUtlis {
 		data.foreachPartition(partition->{
 			Connection connection = getConnection();
 			PreparedStatement pstmt=connection.prepareStatement("INSERT INTO `user_recommendation` "
-					+ "(`contentIds`, `userId`) VALUES (?,?) ON DUPLICATE KEY "
-					+ "UPDATE `contentIds` = values(`contentIds`)");
+					+ "(`contentIds`, `userId`,updateTime) VALUES (?,?,now()) ON DUPLICATE KEY "
+					+ "UPDATE `contentIds` = values(`contentIds`),`updateTime` = values(`updateTime`)");
 			connection.setAutoCommit(false);
 			int i=1;
 			while(partition.hasNext()){
@@ -197,8 +196,8 @@ public class MySQLUtlis {
 		data.foreachPartition(partition->{
 			Connection connection = getConnection();
 			PreparedStatement pstmt=connection.prepareStatement("INSERT INTO `similar_recommendation` "
-					+ "(`contentIds`, `contentId`) VALUES (?,?) ON DUPLICATE KEY "
-					+ "UPDATE `contentIds` = values(`contentIds`)");
+					+ "(`contentIds`, `contentId`,updateTime) VALUES (?,?,now()) ON DUPLICATE KEY "
+					+ "UPDATE `contentIds` = values(`contentIds`),`updateTime` = values(`updateTime`)");
 			connection.setAutoCommit(false);
 			int i=1;
 			while(partition.hasNext()){
@@ -280,7 +279,131 @@ public class MySQLUtlis {
 			}
 		});
 	}
+	/**
+	 * 更新参数ALS模型最优参数
+	 * @throws SQLException
+	 * **/
+	public static boolean updateALSBestParam( int rank,int  maxIter,double regParam)
+			throws SQLException{
 
+		Connection connection = null;
+		PreparedStatement pstmt = null;
+		boolean flag=false;
+		try {
+
+			connection = getConnection();
+			pstmt = connection.prepareStatement("INSERT INTO `model_params` ( " +
+					"`maxIter`, `modelName`, `rank`, `regParam`) " +
+					"VALUES ( ?,'ALS', ?, ?) ON DUPLICATE KEY"+
+					" UPDATE `maxIter` = values(`maxIter`) ," +
+					"`rank` = values(`rank`) ," +
+					"`regParam` = values(`regParam`) ");
+
+			pstmt.setInt(1,maxIter);
+			pstmt.setInt(2,rank);
+			pstmt.setDouble(3,regParam);
+
+			flag = pstmt.execute();
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (pstmt != null) {
+				pstmt.close();
+			}
+			if (connection != null) {
+				connection.close();
+			}
+		}
+		return flag;
+	}
+	//获取ALS模型参数
+	public static Integer getALSMaxIter() throws SQLException {
+
+		Integer maxIter = 10;
+		Connection connection = null;
+		PreparedStatement pstmt = null;
+		try {
+			connection = getConnection();
+
+			pstmt = connection.prepareStatement("select maxIter  from model_params where modelName='ALS'");
+
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				maxIter = rs.getInt("maxIter");
+			}
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (pstmt != null) {
+				pstmt.close();
+			}
+			if (connection != null) {
+				connection.close();
+			}
+
+		}
+		return maxIter;
+	}
+	//获取ALS模型参数
+	public static Integer getALSRank() throws SQLException {
+
+		Integer rank = 10;
+		Connection connection = null;
+		PreparedStatement pstmt = null;
+		try {
+			connection = getConnection();
+
+			pstmt = connection.prepareStatement("select rank  from model_params where modelName='ALS'");
+
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				rank = rs.getInt("rank");
+			}
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (pstmt != null) {
+				pstmt.close();
+			}
+			if (connection != null) {
+				connection.close();
+			}
+
+		}
+		return rank;
+	}
+	//获取ALS模型参数
+	public  static Double getALSRegParam() throws SQLException {
+
+		double regParam = 0.75;
+		Connection connection = null;
+		PreparedStatement pstmt = null;
+		try {
+			connection = getConnection();
+
+			pstmt = connection.prepareStatement("select regParam  from model_params where modelName='ALS'");
+
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				regParam = rs.getDouble("regParam");
+			}
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (pstmt != null) {
+				pstmt.close();
+			}
+			if (connection != null) {
+				connection.close();
+			}
+
+		}
+		return regParam;
+	}
 	//测试本地redis服务是否正常
 	public static void main(String[] args) throws Exception {
 		

@@ -105,7 +105,7 @@ public class BaseDaoImpl implements BaseDao {
 		long count = 0L;
 
 		String jpql = "select o from " + clazz.getSimpleName() + " o ";
-		log.debug("jpql---->" + jpql + sb.toString());
+		LOG.debug("jpql---->" + jpql + sb.toString());
 
 		Query query = em.createQuery(jpql + sb.toString(), clazz);
 		// 设置参数
@@ -153,7 +153,7 @@ public class BaseDaoImpl implements BaseDao {
 	public <T> Object queryForProperty(Class<T> clazz, String property, Serializable entityId) {
 		String jpql = "select o." + property + " from " + getEntityName(clazz) + " o where o." + getEntityId(clazz)
 				+ "=?1";
-		log.debug("jpql----->" + jpql);
+		LOG.debug("jpql----->" + jpql);
 		Query query = em.createQuery(jpql);
 		query.setParameter(1, entityId);
 		Object result = null;

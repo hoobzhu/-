@@ -93,7 +93,7 @@ public class LoginController {
 			JPEGImageEncoder jpegEncoder = JPEGCodec.createJPEGEncoder(jpegOutputStream);              
 			jpegEncoder.encode(challenge);  
 		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
+			LOGGER.error(e.getMessage(), e);
 		}
 
 		return jpegOutputStream.toByteArray();            
@@ -109,7 +109,7 @@ public class LoginController {
 			produces={"application/json"})
 	public LoginResponse login(@RequestBody LoginRequest login){
 		LoginResponse resp = new LoginResponse();
-		logger.debug("captcha ---- > " + login.getCaptcha());
+		LOGGER.debug("captcha ---- > " + login.getCaptcha());
 		try{
 			boolean captchaIsRight = imageCaptchaService.validateResponseForID(
 					login.getRequestId(),login.getCaptcha());
@@ -118,7 +118,7 @@ public class LoginController {
 				return resp;
 			} 
 		}catch(CaptchaServiceException e){
-			logger.error(e.getMessage(),e);
+			LOGGER.error(e.getMessage(),e);
 			resp.setResultCode(StatusCode.UI.UI_20003); //验证码不正确
 			return resp;
 		}
@@ -129,14 +129,14 @@ public class LoginController {
 			RSAPrivateKey privateKey = (RSAPrivateKey) rsaKeys.get(RSAUtil.PRIVATE_KEY);
 			decryptPwd = RSAUtil.decrypt(login.getPassword(), privateKey);
 		} catch (Exception e) {
-			logger.error("", e);
+			LOGGER.error("", e);
 		}
 
 		UserSession session = null;
 		try {
 			session = loginService.authorize(login.getUserId(), decryptPwd);
 		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
+			LOGGER.error(e.getMessage(), e);
 			session = null;
 		}
 
@@ -156,7 +156,7 @@ public class LoginController {
 			HttpServletRequest request = ((ServletRequestAttributes)RequestContextHolder.
 					getRequestAttributes()).getRequest();
 			String ip = request.getRemoteAddr();
-			logger.info("Login from ip address:{}",ip);
+			LOGGER.info("Login from ip address:{}",ip);
 			if(user.getEnableIPBinding()&&!isAllowVisit(user.getIpAddr(), ip)){
 				resp.setResultCode(StatusCode.UI.UI_20001); //IP限制
 			}else{
@@ -231,7 +231,7 @@ public class LoginController {
 			}
 			return rsp;
 		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
+			LOGGER.error(e.getMessage(), e);
 			rsp = new VoResponse<Boolean>(StatusCode.UI.UI_1);
 		}
 		return rsp;
@@ -248,7 +248,7 @@ public class LoginController {
 		try {
 			User user = userService.getUserByUserId(userId);
 			if (user == null) {
-				logger.error("user:{} does not exist.", userId);
+				LOGGER.error("user:{} does not exist.", userId);
 				resp.setResultCode(StatusCode.UI.UI_20005);
 				return resp;
 			}
@@ -260,7 +260,7 @@ public class LoginController {
 			resp.setVo(publicKeyStr);
 			return resp;
 		} catch (Exception e) {
-			logger.error("", e);
+			LOGGER.error("", e);
 			resp.setResultCode(StatusCode.UI.UI_20005);
 			return resp;
 		}

@@ -418,9 +418,9 @@ public class FileUtil {
 		String newUrl = localDirStr+System.currentTimeMillis()+url.substring(url.lastIndexOf("."), url.length());
 		try {
 			if (url.toLowerCase().startsWith("ftp")) {
-				if(!FTPUtils.downloadFile(url, newUrl)){
-					newUrl="";
-				}
+			//	if(!FTPUtils.downloadFile(url, newUrl)){
+			//		newUrl="";
+			//	}
 
 			} else if (url.toLowerCase().startsWith("http")) {
 				if(!httpDownload(url, new File(newUrl))){

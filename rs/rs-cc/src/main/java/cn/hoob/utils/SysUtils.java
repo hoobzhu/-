@@ -1,21 +1,14 @@
 package cn.hoob.utils;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Properties;
-import java.util.Map.Entry;
-
+import cn.hoob.model.SimiartyDataFeatureModel;
+import cn.hoob.model.SimilartyData;
+import cn.hoob.model.SimilartyDatas;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.ml.linalg.BLAS;
@@ -26,9 +19,12 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession.Builder;
 
-import cn.hoob.model.SimiartyDataFeatureModel;
-import cn.hoob.model.SimilartyData;
-import cn.hoob.model.SimilartyDatas;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.*;
+import java.util.Map.Entry;
 
 
 public class SysUtils {
@@ -76,17 +72,49 @@ public class SysUtils {
 	/**
 	 * 本地开发模式时，加载环境配置
 	 * **/
+	public static void isLocalModel(SparkConf sparkConf){
+		sparkConf.set("spark.driver.allowMultipleContexts","true");
+		if(StringUtils.isEmpty(SYSPARAM.getProperty("isLocalModel"))||
+				!"true".equalsIgnoreCase(SYSPARAM.getProperty("isLocalModel"))){
+			return ;
+		}
+		sparkConf.setMaster("local[4]");
+		//本地模式时设置使用root用户
+		System.setProperty("HADOOP_USER_NAME", "daas");
+		Configuration conf = new Configuration();
+		//conf.addResource("/opt/fonsview/NE/rs/rs-cc/etc/core-site.xml");
+		//conf.addResource("/opt/fonsview/NE/rs/rs-cc/etc/hdfs-site.xml");
+		conf.addResource(new Path("/etc/hadoop/conf.cloudera.hdfs/core-site.xml"));
+        conf.addResource(new Path("/etc/hadoop/conf.cloudera.hdfs/hdfs-site.xml"));
+		if(StringUtils.isNotEmpty(SYSPARAM.getProperty("hdfsHost"))){
+			return ;//指定了链接特定的hdfs，则不加载默认的环境配置
+		}
+		Iterator<Entry<String, String>> it=conf.iterator();
+		while(it.hasNext()){
+			Entry<String, String>en=it.next();
+			sparkConf.set(en.getKey(),en.getValue());
+		}
+
+
+
+	}
+	/**
+	 * 本地开发模式时，加载环境配置
+	 * **/
 	public static void isLocalModel(Builder sparkBuilder){
+		sparkBuilder.config("spark.driver.allowMultipleContexts","true");
 		if(StringUtils.isEmpty(SYSPARAM.getProperty("isLocalModel"))||
 				!"true".equalsIgnoreCase(SYSPARAM.getProperty("isLocalModel"))){
 			return ;
 		}
 		sparkBuilder.master("local[4]");
 		//本地模式时设置使用root用户
-		System.setProperty("HADOOP_USER_NAME", "root");
+		System.setProperty("HADOOP_USER_NAME", "daas");
 		Configuration conf = new Configuration();
-		conf.addResource("/opt/fonsview/NE/rs/rs-cc/etc/core-site.xml");
-		conf.addResource("/opt/fonsview/NE/rs/rs-cc/etc/hdfs-site.xml");
+		//conf.addResource("/opt/fonsview/NE/rs/rs-cc/etc/core-site.xml");
+		//conf.addResource("/opt/fonsview/NE/rs/rs-cc/etc/hdfs-site.xml");
+		conf.addResource(new Path("/etc/hadoop/conf.cloudera.hdfs/core-site.xml"));
+		conf.addResource(new Path("/etc/hadoop/conf.cloudera.hdfs/hdfs-site.xml"));
 		if(StringUtils.isNotEmpty(SYSPARAM.getProperty("hdfsHost"))){
 			return ;//指定了链接特定的hdfs，则不加载默认的环境配置
 		}
@@ -94,7 +122,9 @@ public class SysUtils {
 		while(it.hasNext()){
 			Entry<String, String>en=it.next();
 			sparkBuilder.config(en.getKey(),en.getValue());
-		}	    
+
+		}
+
 	}
 	/**
 	 * 获取hdfs用户行为日子文件目录
@@ -160,7 +190,10 @@ public class SysUtils {
 	public static String getHDFSRsBaseDir(){
 		String hdfsHost=SysUtils.getSysparamString("hdfsHost");
 		String hdfsRsBaseDir=SysUtils.getSysparamString("hdfsRsBaseDir");
-		return hdfsHost+"/"+hdfsRsBaseDir;
+		if(StringUtils.isNotEmpty(hdfsHost)){
+			return hdfsHost+"/"+hdfsRsBaseDir;
+		}
+		return hdfsRsBaseDir;
 
 
 	}
@@ -202,12 +235,6 @@ public class SysUtils {
 		return false;
 
 	} 
-	public static Boolean sysparamIsEmpty(){
-		return SYSPARAM.isEmpty();
-	}
-	public static void setSysparam(Properties pro){
-		SYSPARAM.putAll(pro);
-	}
 	/**
 	 * 数据量小的时候可以通过广播数据来接解决问题，建议20w 一下合集的选用该方法操作
 	 * */
@@ -350,4 +377,15 @@ public class SysUtils {
 		}
 		return doubleArray;
 	}
+
+	public static boolean isExist(String  userId, Broadcast<List<String>> userIdsData){
+		boolean  flag =false;
+		List<String> userids=userIdsData.value();
+		if(userids.contains(userId)){
+			return true;
+		}
+		return flag;
+	}
+	//获取模型参数
+
 }

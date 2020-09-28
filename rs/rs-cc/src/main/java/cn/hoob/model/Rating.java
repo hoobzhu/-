@@ -1,7 +1,9 @@
 package cn.hoob.model;
 
 import java.io.Serializable;
-
+/**
+ * @author zhuqinhe
+ */
 public class Rating implements Serializable {
 	private int uId;
 	private int sId;
@@ -88,7 +90,8 @@ public class Rating implements Serializable {
 	}
 
 
-    /****/
+    /**
+     * @param str**/
 	public static Rating parseSimpleRating(String str) {
 		//userId|contentId|playcount
 		String[] fields = str.split("\\|");

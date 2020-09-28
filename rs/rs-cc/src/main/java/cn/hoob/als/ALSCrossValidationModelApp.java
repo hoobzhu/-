@@ -2,9 +2,17 @@ package cn.hoob.als;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.api.java.function.FilterFunction;
+import org.apache.spark.api.java.function.MapFunction;
+import org.apache.spark.ml.Pipeline;
+import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.evaluation.RegressionEvaluator;
+import org.apache.spark.ml.param.ParamMap;
 import org.apache.spark.ml.recommendation.ALS;
 import org.apache.spark.ml.recommendation.ALSModel;
+import org.apache.spark.ml.tuning.CrossValidator;
+import org.apache.spark.ml.tuning.CrossValidatorModel;
+import org.apache.spark.ml.tuning.ParamGridBuilder;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
 import org.apache.spark.sql.Encoders;
@@ -17,6 +25,8 @@ import cn.hoob.model.SeriesModel;
 import cn.hoob.model.UserModel;
 import cn.hoob.utils.MySQLUtlis;
 import cn.hoob.utils.SysUtils;
+
+
 /**ALS算法协同过滤推荐算法
  * 使用Spark 2.0 基于Pipeline,ParamMap,CrossValidation
  * 对超参数进行调优，并进行模型选择
@@ -25,7 +35,7 @@ import cn.hoob.utils.SysUtils;
 
 public class ALSCrossValidationModelApp {
 	
-	private static final Logger LOGGER = LogManager.getLogger(ALSCrossValidationModelApp.class);	
+	private static final Logger LOGGER = LogManager.getLogger(ALSCrossValidationModelApp.class);
 	
 	/****/
 	public static void main(String[] args) throws Exception {
@@ -48,16 +58,16 @@ public class ALSCrossValidationModelApp {
 				option("dbtable","series").load();
 		Encoder<SeriesModel> seriesModelEncoder = Encoders.bean(SeriesModel.class);
 		//合集过滤不满足条件的，转换成简易模型数据
-		Dataset<SeriesModel> seriesModelDataset = seriesRowDataset.map(row-> 
-		SeriesModel.getSeriesModelByIdAndContentId(row),seriesModelEncoder).filter((data) -> data != null);
+		Dataset<SeriesModel> seriesModelDataset = seriesRowDataset.map((MapFunction<Row, SeriesModel>) row->
+		SeriesModel.getSeriesModelByIdAndContentId(row),seriesModelEncoder).filter((FilterFunction<SeriesModel>) (data) -> data != null);
 		//注册视图
 		seriesModelDataset.createOrReplaceTempView("series");
 		//加载日子数据
 		Dataset<String> logDataset= sparkSession.read().textFile(SysUtils.getHDFSUserLogDataUrl().split(","));
 		//初始化日志数据
 		Encoder<Rating> ratingEncoder = Encoders.bean(Rating.class);
-		Dataset<Rating>ratingSimpleDataset=logDataset.map(row->Rating.parseSimpleRating(row),
-				ratingEncoder).filter(rating -> rating != null);
+		Dataset<Rating>ratingSimpleDataset=logDataset.map((MapFunction<String, Rating>) row->Rating.parseSimpleRating(row),
+				ratingEncoder).filter((FilterFunction<Rating>) rating -> rating != null);
 		//ratingSimpleDataset.show();
 		//打捞用户Id,更新db用户数据
 		ratingSimpleDataset.createOrReplaceTempView("ratingsimple");
@@ -83,7 +93,7 @@ public class ALSCrossValidationModelApp {
 				option("url",SysUtils.getSysparamString("oss.jdbc.url")).
 				option("dbtable","userprofile").load();
 		Encoder<UserModel> userModelEncoder = Encoders.bean(UserModel.class);
-		Dataset<UserModel>userModelDataset=reuserRowDataset.map(row->UserModel.getUserModel(row), userModelEncoder);
+		Dataset<UserModel>userModelDataset=reuserRowDataset.map((MapFunction<Row, UserModel>) row->UserModel.getUserModel(row), userModelEncoder);
 		userModelDataset.createOrReplaceTempView("usermodel");
 		//关联用户，内容表 补全日子数据，构建完整的rating对象
 		Dataset<Row>ratingfullDataset=sparkSession.sql("select user.id as uId,s.id as sId,rslog.rating as rating "
@@ -119,36 +129,66 @@ public class ALSCrossValidationModelApp {
 		 */
 		ALSModel model = als.fit(training);
 
-		// Evaluate the model by computing the RMSE on the test data
-		Dataset<Row> predictions = model.transform(test);
 
+		/*
+		 * (1)秩Rank：模型中隐含因子的个数：低阶近似矩阵中隐含特在个数，因子一般多一点比较好，
+		 * 但是会增大内存的开销。因此常在训练效果和系统开销之间进行权衡，通常取值在10-200之间。
+		 * (2)最大迭代次数：运行时的迭代次数，ALS可以做到每次迭代都可以降低评级矩阵的重建误差，
+		 * 一般少数次迭代便能收敛到一个比较合理的好模型。
+		 * 大部分情况下没有必要进行太对多次迭代（10次左右一般就挺好了）
+		 * (3)正则化参数regParam：和其他机器学习算法一样，控制模型的过拟合情况。
+		 * 该值与数据大小，特征，系数程度有关。此参数正是交叉验证需要验证的参数之一。
+		 */
+		// Configure an ML pipeline, which consists of one stage
+		//一般会包含多个stages
+		Pipeline pipeline=new Pipeline().
+				setStages(new PipelineStage[] {als});
+		// We use a ParamGridBuilder to construct a grid of parameters to search over.
+		ParamMap[] paramGrid=new ParamGridBuilder()
+				.addGrid(als.rank(),new int[]{5,8,10,12,15,20})
+				.addGrid(als.regParam(),new double[]{0.05,0.10,0.15,0.20,0.40,0.75,0.80})
+				.addGrid(als.maxIter(),new int[]{1,3,5,8,10,12,15,20})
+				.build();
+
+		// CrossValidator 需要一个Estimator,一组Estimator ParamMaps, 和一个Evaluator.
+		// （1）Pipeline作为Estimator;
+		// （2）定义一个RegressionEvaluator作为Evaluator，并将评估标准设置为“rmse”均方根误差
+		// （3）设置ParamMap
+		// （4）设置numFolds
+		CrossValidator cv=new CrossValidator()
+				.setEstimator(pipeline)
+				.setEvaluator(new RegressionEvaluator()
+						.setLabelCol("rating")
+						.setPredictionCol("predict_rating")
+						.setMetricName("rmse"))
+				.setEstimatorParamMaps(paramGrid)
+				.setNumFolds(5);
+
+		// 运行交叉检验，自动选择最佳的参数组合
+		CrossValidatorModel cvModel=cv.fit(training);
+		//保存模型
+		//cvModel.save("/home/hadoop/spark/cvModel_als.modle");
+
+		System.out.println("numFolds: "+cvModel.getNumFolds());
+		//Test数据集上结果评估
+		Dataset<Row> predictions=cvModel.transform(test);
 		RegressionEvaluator evaluator = new RegressionEvaluator()
-		.setMetricName("rmse")
-		.setLabelCol("rating")
-		.setPredictionCol("predict_rating");
+				.setMetricName("rmse")//RMS Error
+				.setLabelCol("rating")
+				.setPredictionCol("predict_rating");
 		Double rmse = evaluator.evaluate(predictions);
-		System.out.println("Root-mean-square error = " + rmse);
+		System.out.println("RMSE @ test dataset " + rmse);
+		//Output: RMSE @ test dataset 0.943644792277118
 
-		Dataset<Row> userreconmenddata=model.
-				recommendForAllUsers(SysUtils.getSysparamInteger("recommendForAllUsers","20"));
-		//推荐数据视图,输出到RS DB
-		userreconmenddata.createOrReplaceTempView("userreconmend");
-		//清空表数据
-		MySQLUtlis.executeSQL("TRUNCATE user_recommendation",new String[]{});
-		Dataset<Row>result=sparkSession.sql(""
-				+ " select rs.userId as userId,concat_ws(',',collect_set(rs.contentId))as contentIds from ("
-				+ " select um.userId,s.contentId from (select uId,explode(recommendations) from userreconmend) uc "
-				+ " left join usermodel um on uc.uId=um.Id "
-				+ " left join series s on s.id=uc.col.sId )rs group by rs.userId ");
-		result.write().format("jdbc")
-		.mode(SaveMode.Append)
-		.option("url",SysUtils.getSysparamString("rs.jdbc.url"))
-		.option("driver", "com.mysql.jdbc.Driver")
-		.option("dbtable", "user_recommendation")
-		.option("user", SysUtils.getSysparamString("rs.jdbc.user"))
-		.option("password",SysUtils.getSysparamString("rs.jdbc.password"))
-		.save();
-		//result.show();
+		Pipeline bestPipeline = (Pipeline) cvModel.bestModel().parent();
+		PipelineStage[] stages = bestPipeline.getStages();
+		//输出最佳参数存储于db,模型设置成最优参数
+		PipelineStage stage=stages[0];
+		int rank= (int) stage.extractParamMap().get(stage.getParam("rank")).get();
+		double regParam= (double) stage.extractParamMap().get(stage.getParam("regParam")).get();
+		int maxIter= (int) stage.extractParamMap().get(stage.getParam("maxIter")).get();
+		System.out.println("rank:"+rank+",regParam:"+regParam+",maxIter:"+maxIter);
+
 		sparkSession.stop();
 
 	} 

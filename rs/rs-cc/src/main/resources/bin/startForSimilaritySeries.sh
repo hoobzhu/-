@@ -25,9 +25,9 @@ command="spark2-submit \
  			 --name $APP_NAME \
  			 --files $hdfs_conf_path/hdfs-site.xml,$hdfs_conf_path/core-site.xml,$APP_CONF_PATH/config.properties \
  			 --num-executors 3 \
- 			 --executor-cores 4 \
+ 			 --executor-cores 8 \
  			 --executor-memory  8g \
- 			 --driver-memory 12g \
+ 			 --driver-memory 16g \
  			 --principal daas/admin@FONSVIEW.COM \
  			 --keytab /opt/fonsview/NE/daas/etc/keytab/daas.keytab \
  			 --class cn.fonsview.similarity.SimilaritySeriesModelApp $APP_HOME/$APP_JAR_NAME "
