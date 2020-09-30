@@ -1,7 +1,7 @@
 #!/bin/sh
 
 Force=$1
-BASE_PATH="/opt/fonsview/NE/rs/rs-cc"
+BASE_PATH="/opt/hoob/NE/rs/rs-cc"
 BIN_PATH=$BASE_PATH/bin
 BIN_PATH_LIB=$BASE_PATH/lib
 CONFIG_PATH=$BASE_PATH/etc

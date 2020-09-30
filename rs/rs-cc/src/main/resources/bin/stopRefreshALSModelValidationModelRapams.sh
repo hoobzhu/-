@@ -1,7 +1,7 @@
 #!/bin/sh
 
 
-yarn_application_id=`yarn --config /etc/hadoop/conf.cloudera.yarn application --list | grep "rs.*" | awk -F ' ' '{print $1}'`
+yarn_application_id=`yarn --config /etc/hadoop/conf.cloudera.yarn application --list | grep "RS.RefreshALSModelValidationModelRapams*" | awk -F ' ' '{print $1}'`
 if [[ -z $yarn_application_id ]];
 then
 	echo "spark stopped."
