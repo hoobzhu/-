@@ -17,13 +17,11 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.SparkSession.Builder;
 import cn.hoob.model.Rating;
 import cn.hoob.model.SeriesModel;
 import cn.hoob.model.UserModel;
-import cn.hoob.utils.MySQLUtlis;
 import cn.hoob.utils.SysUtils;
 
 
@@ -33,9 +31,9 @@ import cn.hoob.utils.SysUtils;
  * 
  */
 
-public class ALSCrossValidationModelApp {
+public class RefreshALSCrossValidationModelParams {
 	
-	private static final Logger LOGGER = LogManager.getLogger(ALSCrossValidationModelApp.class);
+	private static final Logger LOGGER = LogManager.getLogger(RefreshALSCrossValidationModelParams.class);
 	
 	/****/
 	public static void main(String[] args) throws Exception {

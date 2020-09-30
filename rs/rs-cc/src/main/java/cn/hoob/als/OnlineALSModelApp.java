@@ -49,7 +49,7 @@ public class OnlineALSModelApp {
         SysUtils.isLocalModel(sparkConf );
         //创建JavaStreamingContext对象
         // 每隔60秒钟，sparkStreaming作业就会收集最近60秒内的数据源接收过来的数据
-        JavaStreamingContext jsc = new JavaStreamingContext(sparkConf , Durations.seconds(180));
+        JavaStreamingContext jsc = new JavaStreamingContext(sparkConf , Durations.seconds(300*4));
 
 
 
@@ -73,7 +73,7 @@ public class OnlineALSModelApp {
                 option("password",SysUtils.getSysparamString("rs.jdbc.password")).
                 option("url",SysUtils.getSysparamString("rs.jdbc.url")).
                 option("dbtable","user_recommendation").load();
-        reuserRowDataset.createOrReplaceTempView("users");
+        reuserRowDataset.createOrReplaceTempView("reUsers");
         //加载已推荐的用户的数据
         Dataset<Row> seriesRowDataset =sparkSession.read().
                 format("jdbc").
@@ -117,19 +117,20 @@ public class OnlineALSModelApp {
         //  JavaInputDStream<ConsumerRecord<Object, Object>> lines = KafkaUtils.createDirectStream(jsc, LocationStrategies.PreferConsistent(),
         //        ConsumerStrategies.Subscribe(topics, kafkaParams,offsets));
         //创建DStream
-        JavaInputDStream<ConsumerRecord<Object, Object>> lines = KafkaUtils.createDirectStream(jsc, LocationStrategies.PreferConsistent(),
+        JavaInputDStream<ConsumerRecord<Object, Object>> lines = KafkaUtils.createDirectStream(jsc,
+                LocationStrategies.PreferConsistent(),
                 ConsumerStrategies.Subscribe(topics, kafkaParams));
 
         //拆分Kafka topic里面的数据，过滤不符合要求的数据
         JavaDStream<UrlModel> linesSplit = lines
                 .filter(line->(line.value()+"").contains(filterUrl))
                 .flatMap(new FlatMapFunction<ConsumerRecord<Object, Object>, UrlModel>() {
-            @Override
-            public Iterator<UrlModel> call(ConsumerRecord<Object, Object> line) throws Exception {
-                String url=line.value().toString();
-                return Arrays.asList(new UrlModel[]{UrlModel.getUrlModel(url)}).iterator();
-            }
-        }).filter(line->line!=null);
+                    @Override
+                    public Iterator<UrlModel> call(ConsumerRecord<Object, Object> line) throws Exception {
+                        String url=line.value().toString();
+                        return Arrays.asList(new UrlModel[]{UrlModel.getUrlModel(url)}).iterator();
+                    }
+                }).filter(line->line!=null);
         //实时推荐
         Encoder<UrlModel> urlModelEncoder = Encoders.bean(UrlModel.class);
         linesSplit.foreachRDD(rdd->{
@@ -138,16 +139,16 @@ public class OnlineALSModelApp {
                 return;
             }
 
-            Dataset<UrlModel> tmpusers = sparkSession.createDataset(rdd.rdd(), urlModelEncoder);
-            tmpusers.createOrReplaceTempView("tmpusers");
-            Dataset usertDatset=sparkSession.sql("select u.id as uId from tmpusers tu " +
-                    " left join users u on u.userId=tu.userId " +
-                    " where u.id !=null ").distinct();
+            Dataset<UrlModel> tmpUsers = sparkSession.createDataset(rdd.rdd(), urlModelEncoder);
+            tmpUsers.createOrReplaceTempView("tmpUsers");
+            Dataset usertDatset=sparkSession.sql("select um.id as uId from tmpUsers tu " +
+                    " left join reUsers u on u.userId=tu.userId " +
+                    " left join usermodel um on um.userId=tu.userId " +
+                    " where u.id is not null ").distinct();
             if(usertDatset.isEmpty()){
                 return ;
             }
             Dataset<Row> reresult = model.recommendForUserSubset(usertDatset, 20);
-            reresult.show();
             if(reresult.isEmpty()){
                 return ;
             }
@@ -160,7 +161,7 @@ public class OnlineALSModelApp {
             if(result.isEmpty()){
                 return ;
             }
-            result.show();
+            // result.show();
             MySQLUtlis.excuteBatchReUser(result);
         });
         linesSplit.print();
