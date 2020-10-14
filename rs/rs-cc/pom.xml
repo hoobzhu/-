@@ -87,9 +87,8 @@
 		<dependency>
 			<groupId>org.apache.spark</groupId>
 			<artifactId>spark-streaming_2.11</artifactId>
-			<version>2.2.0</version>
+			<version>${spark.version}</version>
 		</dependency>
-
 		<!-- sparkSteaming跟Kafka整合的依赖 -->
 		<dependency>
 			<groupId>org.apache.spark</groupId>
@@ -97,12 +96,33 @@
 			<version>${spark.version}</version>
 		</dependency>
 
-
+		<!--StructuredStreaming跟Kafka整合的依赖 -->
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-sql-kafka-0-10_2.11</artifactId>
+			<version>${spark.version}</version>
+		</dependency>
+		<!--Kafka-->
+		<!--<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka_2.11</artifactId>
+			<version>${kafka.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka-clients</artifactId>
+			<version>${kafka.version}</version>
+		</dependency>-->
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka-clients</artifactId>
+			<version>0.10.0.0</version>
+		</dependency>
 		<!-- mysql的连接驱动依赖 -->
 		<dependency>
 			<groupId>mysql</groupId>
 			<artifactId>mysql-connector-java</artifactId>
-			<version>5.1.38</version>
+			<version>5.1.31</version>
 		</dependency>
 
 
@@ -118,11 +138,11 @@
 		</dependency>
 
 		<!--读取excel文件 -->
-		<!--<dependency> <groupId>org.apache.poi</groupId> <artifactId>poi</artifactId> 
+		<!--<dependency> <groupId>org.apache.poi</groupId> <artifactId>poi</artifactId>
 			<version>3.15</version> </dependency> -->
-		<!--<dependency> <groupId>org.apache.poi</groupId> <artifactId>poi-ooxml</artifactId> 
+		<!--<dependency> <groupId>org.apache.poi</groupId> <artifactId>poi-ooxml</artifactId>
 			<version>3.15</version> </dependency> -->
-		<!-- <dependency> <groupId>com.crealytics</groupId> <artifactId>spark-excel_2.12</artifactId> 
+		<!-- <dependency> <groupId>com.crealytics</groupId> <artifactId>spark-excel_2.12</artifactId>
 			<version>0.12.5</version> </dependency> -->
 		<dependency>
 			<groupId>com.databricks</groupId>
@@ -218,8 +238,6 @@
 			<artifactId>log4j-slf4j-impl</artifactId>
 			<version>${log4j2.version}</version>
 		</dependency>
-
-
 	</dependencies>
 <!-- 
 	 <build>

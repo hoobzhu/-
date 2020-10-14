@@ -5,13 +5,14 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.beans.PropertyVetoException;
+import java.io.Serializable;
 import java.sql.*;
 
 /*****
  * 慎用直连，rdd中大量数据查询，直接爆炸，改用连接池
  *
  * ******/
-public class MySQLUtlis {
+public class MySQLUtlis implements Serializable {
 
 	private static final String url;
 	private static final String user;
@@ -168,6 +169,51 @@ public class MySQLUtlis {
 					connection.commit();
 				}
 			}
+			connection.setAutoCommit(true);
+			try {
+				if (pstmt != null) {
+					pstmt.close();
+				}
+				if (connection != null) {
+					connection.close();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}finally{
+				if (pstmt != null) {
+					pstmt.close();
+				}
+				if (connection != null) {
+					connection.close();
+				}
+			}
+		});
+	}
+	/*****/
+	public static void excuteBatchReUserneNew(Dataset<Row> data){
+		data.foreachPartition(partition->{
+			//一个分区一个连接
+			Connection connection =DriverManager.getConnection(SysUtils.getSysparamString("rs.jdbc.url"),
+					SysUtils.getSysparamString("rs.jdbc.user"),
+					SysUtils.getSysparamString("rs.jdbc.password"));
+			PreparedStatement pstmt=connection.prepareStatement("INSERT INTO `user_recommendation` "
+					+ "(`contentIds`, `userId`,updateTime) VALUES (?,?,NOW())" +
+					" ON DUPLICATE KEY UPDATE `contentIds` = values(`contentIds`),`updateTime` = values(`updateTime`)");
+			connection.setAutoCommit(false);
+			int i=1;
+			while(partition.hasNext()){
+				Row row=partition.next();
+				pstmt.setString(1,row.getAs("contentIds"));
+				pstmt.setString(2,row.getAs("userId"));
+				pstmt.addBatch();
+				i++;
+				if(i%200==0){
+					pstmt.executeBatch();   //批量执行sql，避免因此单次的insert操作建立多个Connection浪费资源
+					connection.commit();
+				}
+			}
+			pstmt.executeBatch();
+			connection.commit();
 			connection.setAutoCommit(true);
 			try {
 				if (pstmt != null) {
@@ -404,6 +450,32 @@ public class MySQLUtlis {
 		}
 		return regParam;
 	}
+	//释放连接回连接池
+	public static void close(Connection conn, PreparedStatement pst, ResultSet rs){
+		if(rs!=null){
+			try {
+				rs.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		if(pst!=null){
+			try {
+				pst.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+
+		if(conn!=null){
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
 	//测试本地redis服务是否正常
 	public static void main(String[] args) throws Exception {
 		

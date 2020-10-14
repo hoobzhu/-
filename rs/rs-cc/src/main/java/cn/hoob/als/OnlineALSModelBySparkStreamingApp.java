@@ -23,7 +23,7 @@ import java.util.*;
  * StreamingContext  wordcount
  * @author zhuqinhe
  */
-public class OnlineALSModelApp {
+public class OnlineALSModelBySparkStreamingApp {
     public static void main(String[] args) throws Exception {
         //初始化系统参数
        /* Configuration hadoopConf = new Configuration();
@@ -45,7 +45,7 @@ public class OnlineALSModelApp {
         UserGroupInformation.loginUserFromKeytab(user, keyPath);*/
 
         SysUtils.initSysParam(args);
-        SparkConf sparkConf  =new SparkConf().setAppName("OnlineALSModelApp");
+        SparkConf sparkConf  =new SparkConf().setAppName("OnlineALSModelBySparkStreamingApp");
         SysUtils.isLocalModel(sparkConf );
         //创建JavaStreamingContext对象
         // 每隔60秒钟，sparkStreaming作业就会收集最近60秒内的数据源接收过来的数据
@@ -162,7 +162,7 @@ public class OnlineALSModelApp {
                 return ;
             }
             // result.show();
-            MySQLUtlis.excuteBatchReUser(result);
+            MySQLUtlis.excuteBatchReUserneNew(result);
         });
         linesSplit.print();
         jsc.start();

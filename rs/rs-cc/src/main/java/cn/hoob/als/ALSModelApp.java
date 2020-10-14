@@ -3,6 +3,7 @@ package cn.hoob.als;
 import cn.hoob.model.Rating;
 import cn.hoob.model.SeriesModel;
 import cn.hoob.model.UserModel;
+import cn.hoob.utils.HDFSUtils;
 import cn.hoob.utils.MySQLUtlis;
 import cn.hoob.utils.SysUtils;
 import org.apache.logging.log4j.LogManager;
@@ -32,7 +33,7 @@ public class ALSModelApp {
 
 		//初始化系统参数
 		SysUtils.initSysParam(args);
-		Builder sparkBuilder =SparkSession.builder().appName("ALSCrossValidationModelApp");
+		Builder sparkBuilder =SparkSession.builder().appName("ALSModelApp");
 		//本地开发调试时配置成LocalMoodel
 		SysUtils.isLocalModel(sparkBuilder);
 		//创建 sparkSession
@@ -47,20 +48,19 @@ public class ALSModelApp {
 				option("dbtable","series").load();
 		Encoder<SeriesModel> seriesModelEncoder = Encoders.bean(SeriesModel.class);
 		//合集过滤不满足条件的，转换成简易模型数据
-		Dataset<SeriesModel> seriesModelDataset = seriesRowDataset.map((MapFunction<Row, SeriesModel>) row->
-		SeriesModel.getSeriesModelByIdAndContentId(row),seriesModelEncoder).filter((FilterFunction<SeriesModel>) (data) -> data != null);
+		Dataset<SeriesModel> seriesModelDataset = seriesRowDataset.map(row->
+				SeriesModel.getSeriesModelByIdAndContentId(row),seriesModelEncoder).filter((data) -> data != null);
 		//注册视图
 		seriesModelDataset.createOrReplaceTempView("series");
 		//加载日子数据
 		Dataset<String> logDataset= sparkSession.read().textFile(SysUtils.getHDFSUserLogDataUrl().split(","));
 		//初始化日志数据
 		Encoder<Rating> ratingEncoder = Encoders.bean(Rating.class);
-		Dataset<Rating>ratingSimpleDataset=logDataset.map((MapFunction<String, Rating>) row->Rating.parseSimpleRating(row),
-				ratingEncoder).filter((FilterFunction<Rating>) rating -> rating != null);
+		Dataset<Rating>ratingSimpleDataset=logDataset.map(row->Rating.parseSimpleRating(row),
+				ratingEncoder).filter(rating -> rating != null);
 		//ratingSimpleDataset.show();
 		//打捞用户Id,更新db用户数据
 		ratingSimpleDataset.createOrReplaceTempView("ratingsimple");
-
 		//直接加载AAA db用户表获取用户的全量信息，无需自己打捞构建
 		//Dataset<Row> userIdDataset=sparkSession.sql("select DISTINCT userId from ratingsimple ");
 		//userIdDataset.write().format("jdbc")
@@ -82,14 +82,14 @@ public class ALSModelApp {
 				option("url",SysUtils.getSysparamString("oss.jdbc.url")).
 				option("dbtable","userprofile").load();
 		Encoder<UserModel> userModelEncoder = Encoders.bean(UserModel.class);
-		Dataset<UserModel>userModelDataset=reuserRowDataset.map((MapFunction<Row, UserModel>) row->UserModel.getUserModel(row), userModelEncoder);
+		Dataset<UserModel>userModelDataset=reuserRowDataset.map(row->UserModel.getUserModel(row), userModelEncoder);
 		userModelDataset.createOrReplaceTempView("usermodel");
 		//关联用户，内容表 补全日子数据，构建完整的rating对象
 		Dataset<Row>ratingfullDataset=sparkSession.sql("select user.id as uId,s.id as sId,rslog.rating as rating "
 				+ " from ratingsimple rslog "
 				+ " left join series s on rslog.scontentId=s.contentId"
 				+ " left join usermodel user on rslog.userId=user.userId "
-				+ " where user.id!=null and s.id!=null ");
+				+ " where s.status=1 and user.id is not Null and s.id is not Null ");
 		//将整个数据集划分为训练集和测试集
 		//注意training集将用于Cross Validation,而test集将用于最终模型的评估
 		//在traning集中，在Croos Validation时将进一步划分为K份，每次留一份作为
@@ -98,15 +98,15 @@ public class ALSModelApp {
 		Dataset<Row>[] splits = ratingfullDataset.randomSplit(new double[]{0.8, 0.2});
 		Dataset<Row> training = splits[0];
 		Dataset<Row> test = splits[1];
-
 		// Build the recommendation model using ALS on the training data
+		//获取模型参数
 		ALS als=new ALS()
-		.setMaxIter(8)
-		.setRank(20).setRegParam(0.8)
-		.setUserCol("uId")
-		.setItemCol("sId")
-		.setRatingCol("rating")
-		.setPredictionCol("predict_rating");
+				.setMaxIter(MySQLUtlis.getALSMaxIter())
+				.setRank(MySQLUtlis.getALSRank()).setRegParam(MySQLUtlis.getALSRegParam())
+				.setUserCol("uId")
+				.setItemCol("sId")
+				.setRatingCol("rating")
+				.setPredictionCol("predict_rating");
 		/*
 		 * (1)秩Rank：模型中隐含因子的个数：低阶近似矩阵中隐含特在个数，因子一般多一点比较好，
 		 * 但是会增大内存的开销。因此常在训练效果和系统开销之间进行权衡，通常取值在10-200之间。
@@ -117,14 +117,17 @@ public class ALSModelApp {
 		 * 该值与数据大小，特征，系数程度有关。此参数正是交叉验证需要验证的参数之一。
 		 */
 		ALSModel model = als.fit(training);
-
+		//存储模型，用于后续实时推荐,检查hdfs目录是否存在
+		String modelSaveUrl=SysUtils.getHDFSRsBaseDir()+"/model/als/";
+		HDFSUtils.rm(modelSaveUrl);
+		model.save(modelSaveUrl);
 		// Evaluate the model by computing the RMSE on the test data
 		Dataset<Row> predictions = model.transform(test);
 
 		RegressionEvaluator evaluator = new RegressionEvaluator()
-		.setMetricName("rmse")
-		.setLabelCol("rating")
-		.setPredictionCol("predict_rating");
+				.setMetricName("rmse")
+				.setLabelCol("rating")
+				.setPredictionCol("predict_rating");
 		Double rmse = evaluator.evaluate(predictions);
 		System.out.println("Root-mean-square error = " + rmse);
 
@@ -140,13 +143,14 @@ public class ALSModelApp {
 				+ " left join usermodel um on uc.uId=um.Id "
 				+ " left join series s on s.id=uc.col.sId )rs group by rs.userId ");
 		result.write().format("jdbc")
-		.mode(SaveMode.Append)
-		.option("url",SysUtils.getSysparamString("rs.jdbc.url"))
-		.option("driver", "com.mysql.jdbc.Driver")
-		.option("dbtable", "user_recommendation")
-		.option("user", SysUtils.getSysparamString("rs.jdbc.user"))
-		.option("password",SysUtils.getSysparamString("rs.jdbc.password"))
-		.save();
+				.mode(SaveMode.Append)
+				.option("url",SysUtils.getSysparamString("rs.jdbc.url"))
+				.option("driver", "com.mysql.jdbc.Driver")
+				.option("dbtable", "user_recommendation")
+				.option("user", SysUtils.getSysparamString("rs.jdbc.user"))
+				.option("password",SysUtils.getSysparamString("rs.jdbc.password"))
+				.save();
+
 		//result.show();
 		sparkSession.stop();
 

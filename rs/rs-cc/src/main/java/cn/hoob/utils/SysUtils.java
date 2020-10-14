@@ -40,9 +40,10 @@ public class SysUtils {
 		File file = new File(defaultConfigUrl);
 		Properties temp = new Properties();
 		temp.putAll(SYSPARAM);
+		InputStream fis = null;
 		//清除更新前配置
 		if(file.exists()){
-			InputStream fis = null;
+
 			try {
 				fis = new FileInputStream(file);
 				SYSPARAM.load(fis);
@@ -64,8 +65,22 @@ public class SysUtils {
 		temp = null;
 		//集群环境运行时加载配置文件
 		if(SYSPARAM.isEmpty()){
-			SystemProperties  pro=new SystemProperties();
-			SYSPARAM.putAll(pro.getSystemProperties());
+			try {
+				fis=SysUtils.class.getClassLoader().getResourceAsStream("config.properties");
+				SYSPARAM.load(fis);
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+				if(fis!=null){
+					try {
+						fis.close();
+					} catch (IOException e) {
+						LOGGER.debug(e.getMessage(), e);
+					}
+				}
+			}
+			//SystemProperties  pro=new SystemProperties();
+			///SYSPARAM.putAll(pro.getSystemProperties());
 		}
 	}
 

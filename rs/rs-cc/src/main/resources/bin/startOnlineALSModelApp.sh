@@ -28,6 +28,8 @@ command="spark2-submit \
  			 --executor-cores 6 \
  			 --executor-memory 8g \
  			 --driver-memory 8g \
+ 			 --driver-class-path  $APP_HOME/mysql-connector-java-8.0.17.jar \
+       --jars $APP_HOME/mysql-connector-java-8.0.17.jar \
  			 --principal daas/admin@hoob.COM \
  			 --keytab /opt/hoob/NE/daas/etc/keytab/daas.keytab \
  			 --class cn.hoob.rscc.als.OnlineALSModelApp $APP_HOME/$APP_JAR_NAME "
